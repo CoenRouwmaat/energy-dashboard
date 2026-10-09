@@ -6,8 +6,9 @@ the worked example in the NED API manual (https://ned.nl/nl/handleiding-api).
 
 import re
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
 from energy_dashboard.enums import (
     Activity,
@@ -113,3 +114,76 @@ class UtilizationPage(BaseModel):
 
     items: list[Utilization] = Field(alias="hydra:member")
     total_items: int = Field(alias="hydra:totalItems")
+
+
+class Page[T](BaseModel):
+    """A single (JSON-LD/Hydra) page of records of type `T`."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    items: list[T] = Field(alias="hydra:member")
+    total_items: int = Field(alias="hydra:totalItems")
+
+
+def _iris_to_ids(value: object) -> object:
+    if isinstance(value, list):
+        return [_iri_to_id(item) for item in value]
+    return value
+
+
+class PointRecord(BaseModel):
+    """A region from `GET /points`; parent/child points are parsed to their ids."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: int
+    identifier: int
+    name: str
+    name_short: str = Field(alias="nameshort")
+    valid_from: datetime = Field(alias="validfrom")
+    valid_to: datetime | None = Field(default=None, alias="validto")
+    child_points: Annotated[list[int], BeforeValidator(_iris_to_ids)] = Field(
+        default_factory=list, alias="childpoints"
+    )
+    parent_points: Annotated[list[int], BeforeValidator(_iris_to_ids)] = Field(
+        default_factory=list, alias="parentpoints"
+    )
+
+
+class TypeRecord(BaseModel):
+    """An energy carrier from `GET /types`."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: int
+    identifier: int
+    name: str
+    name_short: str = Field(alias="nameshort")
+
+
+class ActivityRecord(BaseModel):
+    """An activity from `GET /activities`."""
+
+    id: int
+    name: str
+
+
+class ClassificationRecord(BaseModel):
+    """A classification from `GET /classifications`."""
+
+    id: int
+    name: str
+
+
+class GranularityRecord(BaseModel):
+    """A granularity from `GET /granularities`."""
+
+    id: int
+    name: str
+
+
+class GranularityTimeZoneRecord(BaseModel):
+    """A time zone from `GET /granularity_time_zones`."""
+
+    id: int
+    name: str

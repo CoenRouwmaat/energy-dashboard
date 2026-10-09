@@ -8,7 +8,18 @@ from typing import Self
 import httpx
 
 from energy_dashboard.exceptions import NedApiError
-from energy_dashboard.models import Utilization, UtilizationPage, UtilizationQuery
+from energy_dashboard.models import (
+    ActivityRecord,
+    ClassificationRecord,
+    GranularityRecord,
+    GranularityTimeZoneRecord,
+    Page,
+    PointRecord,
+    TypeRecord,
+    Utilization,
+    UtilizationPage,
+    UtilizationQuery,
+)
 from energy_dashboard.settings import NedSettings
 
 RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
@@ -96,3 +107,104 @@ class NedClient:
             if len(page.items) < page_query.items_per_page:
                 return
             page_query = page_query.model_copy(update={"page": page_query.page + 1})
+
+    async def _get_page[T](
+        self, path: str, page_model: type[Page[T]], page: int, items_per_page: int
+    ) -> Page[T]:
+        response = await self._get(path, {"page": page, "itemsPerPage": items_per_page})
+        return page_model.model_validate(response.json())
+
+    async def _iter_all[T](
+        self, path: str, page_model: type[Page[T]], items_per_page: int
+    ) -> AsyncIterator[T]:
+        page = 1
+        while True:
+            result = await self._get_page(path, page_model, page, items_per_page)
+            for item in result.items:
+                yield item
+            if len(result.items) < items_per_page:
+                return
+            page += 1
+
+    async def get_points(
+        self, page: int = 1, items_per_page: int = 200
+    ) -> Page[PointRecord]:
+        """Fetch a single page of points from `/points`."""
+        return await self._get_page("/points", Page[PointRecord], page, items_per_page)
+
+    def iter_points(self, items_per_page: int = 200) -> AsyncIterator[PointRecord]:
+        """Fetch all pages of points from `/points`, in order."""
+        return self._iter_all("/points", Page[PointRecord], items_per_page)
+
+    async def get_types(
+        self, page: int = 1, items_per_page: int = 200
+    ) -> Page[TypeRecord]:
+        """Fetch a single page of types from `/types`."""
+        return await self._get_page("/types", Page[TypeRecord], page, items_per_page)
+
+    def iter_types(self, items_per_page: int = 200) -> AsyncIterator[TypeRecord]:
+        """Fetch all pages of types from `/types`, in order."""
+        return self._iter_all("/types", Page[TypeRecord], items_per_page)
+
+    async def get_activities(
+        self, page: int = 1, items_per_page: int = 200
+    ) -> Page[ActivityRecord]:
+        """Fetch a single page of activities from `/activities`."""
+        return await self._get_page(
+            "/activities", Page[ActivityRecord], page, items_per_page
+        )
+
+    def iter_activities(
+        self, items_per_page: int = 200
+    ) -> AsyncIterator[ActivityRecord]:
+        """Fetch all pages of activities from `/activities`, in order."""
+        return self._iter_all("/activities", Page[ActivityRecord], items_per_page)
+
+    async def get_classifications(
+        self, page: int = 1, items_per_page: int = 200
+    ) -> Page[ClassificationRecord]:
+        """Fetch a single page of classifications from `/classifications`."""
+        return await self._get_page(
+            "/classifications", Page[ClassificationRecord], page, items_per_page
+        )
+
+    def iter_classifications(
+        self, items_per_page: int = 200
+    ) -> AsyncIterator[ClassificationRecord]:
+        """Fetch all pages of classifications from `/classifications`, in order."""
+        return self._iter_all(
+            "/classifications", Page[ClassificationRecord], items_per_page
+        )
+
+    async def get_granularities(
+        self, page: int = 1, items_per_page: int = 200
+    ) -> Page[GranularityRecord]:
+        """Fetch a single page of granularities from `/granularities`."""
+        return await self._get_page(
+            "/granularities", Page[GranularityRecord], page, items_per_page
+        )
+
+    def iter_granularities(
+        self, items_per_page: int = 200
+    ) -> AsyncIterator[GranularityRecord]:
+        """Fetch all pages of granularities from `/granularities`, in order."""
+        return self._iter_all("/granularities", Page[GranularityRecord], items_per_page)
+
+    async def get_granularity_time_zones(
+        self, page: int = 1, items_per_page: int = 200
+    ) -> Page[GranularityTimeZoneRecord]:
+        """Fetch a single page of granularity time zones from `/granularity_time_zones`."""
+        return await self._get_page(
+            "/granularity_time_zones",
+            Page[GranularityTimeZoneRecord],
+            page,
+            items_per_page,
+        )
+
+    def iter_granularity_time_zones(
+        self, items_per_page: int = 200
+    ) -> AsyncIterator[GranularityTimeZoneRecord]:
+        """Fetch all pages of granularity time zones from `/granularity_time_zones`, in order."""
+        return self._iter_all(
+            "/granularity_time_zones", Page[GranularityTimeZoneRecord], items_per_page
+        )
