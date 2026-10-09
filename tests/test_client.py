@@ -1,9 +1,15 @@
 import asyncio
 from datetime import UTC, datetime
+from typing import Protocol
 
 import httpx
 import pytest
 from pydantic import ValidationError
+
+
+class _HasId(Protocol):
+    id: int
+
 
 from energy_dashboard import (
     Activity,
@@ -15,6 +21,8 @@ from energy_dashboard import (
     NedSettings,
     Page,
     Point,
+    PointQuery,
+    Utilization,
     UtilizationPage,
     UtilizationQuery,
 )
@@ -227,7 +235,13 @@ def test_iter_reference_endpoint_walks_pages(name: str, record: dict) -> None:
 
     async def run() -> list:
         async with make_client(httpx.MockTransport(handler)) as client:
-            return [r async for r in getattr(client, f"iter_{name}")(items_per_page=2)]
+            iterator = getattr(client, f"iter_{name}")
+            kwargs = (
+                {"query": PointQuery(items_per_page=2)}
+                if name == "points"
+                else {"items_per_page": 2}
+            )
+            return [r async for r in iterator(**kwargs)]
 
     assert len(asyncio.run(run())) == 3
     assert pages_requested == ["1", "2"]
@@ -427,6 +441,104 @@ def test_max_retries_zero_disables_retrying(monkeypatch: pytest.MonkeyPatch) -> 
     with pytest.raises(NedApiError):
         asyncio.run(run())
     assert len(requests) == 1
+
+
+def test_get_utilizations_sends_id_and_order_when_set() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json=page_body(1))
+
+    query = make_query()
+    query = query.model_copy(update={"id": 42, "order_by_valid_from": "asc"})
+
+    async def run() -> None:
+        async with make_client(httpx.MockTransport(handler)) as client:
+            await client.get_utilizations(query)
+
+    asyncio.run(run())
+    params = requests[0].url.params
+    assert params["id"] == "42"
+    assert params["order[validfrom]"] == "asc"
+
+
+def test_get_utilizations_omits_id_and_order_by_default() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json=page_body(1))
+
+    async def run() -> None:
+        async with make_client(httpx.MockTransport(handler)) as client:
+            await client.get_utilizations(make_query())
+
+    asyncio.run(run())
+    params = requests[0].url.params
+    assert "id" not in params
+    assert "order[validfrom]" not in params
+
+
+def test_get_utilization_fetches_single_record_by_id() -> None:
+    async def run() -> Utilization:
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url.path == "/utilizations/7"
+            return httpx.Response(200, json=NED_EXAMPLE_RECORD)
+
+        async with make_client(httpx.MockTransport(handler)) as client:
+            return await client.get_utilization(7)
+
+    record = asyncio.run(run())
+    assert record.id == NED_EXAMPLE_RECORD["id"]
+
+
+def test_get_points_sends_filter_params() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"hydra:member": [], "hydra:totalItems": 0})
+
+    query = PointQuery(name="Groningen", identifier=1, parent_points=0, child_points=20)
+
+    async def run() -> None:
+        async with make_client(httpx.MockTransport(handler)) as client:
+            await client.get_points(query)
+
+    asyncio.run(run())
+    params = requests[0].url.params
+    assert params["name"] == "Groningen"
+    assert params["identifier"] == "1"
+    assert params["parentpoints"] == "0"
+    assert params["childpoints"] == "20"
+
+
+SINGLE_RECORD_ENDPOINTS = [
+    ("point", "points", POINT_RECORD),
+    ("type", "types", {"id": 2, "identifier": 2, "name": "Solar", "nameshort": "ZON"}),
+    ("activity", "activities", {"id": 1, "name": "Providing"}),
+    ("classification", "classifications", {"id": 2, "name": "Current"}),
+    ("granularity", "granularities", {"id": 5, "name": "Hour"}),
+    ("granularity_time_zone", "granularity_time_zones", {"id": 1, "name": "CET"}),
+]
+
+
+@pytest.mark.parametrize(("name", "plural", "record"), SINGLE_RECORD_ENDPOINTS)
+def test_get_by_id_fetches_single_record(name: str, plural: str, record: dict) -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json=record)
+
+    async def run() -> _HasId:
+        async with make_client(httpx.MockTransport(handler)) as client:
+            return await getattr(client, f"get_{name}")(record["id"])
+
+    result = asyncio.run(run())
+    assert requests[0].url.path == f"/{plural}/{record['id']}"
+    assert result.id == record["id"]
 
 
 def test_context_manager_closes_http_client() -> None:

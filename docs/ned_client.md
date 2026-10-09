@@ -68,7 +68,17 @@ async with NedClient() as client:
 ```
 
 `PointRecord.child_points` and `parent_points` are parsed from NED's IRI references
-down to point ids. Filtering and the `/{id}` endpoints are not covered yet.
+down to point ids.
+
+Each reference endpoint also has a single-record lookup, e.g. `get_point(id)`,
+`get_type(id)`, `get_activity(id)`, `get_classification(id)`, `get_granularity(id)`,
+`get_granularity_time_zone(id)`, and `get_utilization(id)` for `/utilizations/{id}`.
+
+`get_points`/`iter_points` take an optional `PointQuery` to filter by `id`,
+`identifier`, `name`, `parent_points`, or `child_points`.
+
+`UtilizationQuery` also accepts an optional `id` (exact match) and
+`order_by_valid_from` (`"asc"` or `"desc"`) to sort results by `validfrom`.
 
 ## Retries and rate limits
 

@@ -6,6 +6,7 @@ from types import TracebackType
 from typing import Self
 
 import httpx
+from pydantic import BaseModel
 
 from energy_dashboard.exceptions import NedApiError
 from energy_dashboard.models import (
@@ -15,6 +16,7 @@ from energy_dashboard.models import (
     GranularityTimeZoneRecord,
     Page,
     PageQuery,
+    PointQuery,
     PointRecord,
     TypeRecord,
     Utilization,
@@ -98,6 +100,12 @@ class NedClient:
         response = await self._get(path, query.to_params())
         return page_model.model_validate(response.json())
 
+    async def _get_by_id[T: BaseModel](
+        self, path: str, record_model: type[T], id: int
+    ) -> T:
+        response = await self._get(f"{path}/{id}", {})
+        return record_model.model_validate(response.json())
+
     async def _iter_all[T, Q: PageQuery](
         self, path: str, page_model: type[Page[T]], query: Q
     ) -> AsyncIterator[T]:
@@ -121,21 +129,23 @@ class NedClient:
         """
         return self._iter_all("/utilizations", UtilizationPage, query)
 
-    async def get_points(
-        self, page: int = 1, items_per_page: int = 200
-    ) -> Page[PointRecord]:
-        """Fetch a single page of points from `/points`."""
-        return await self._get_page(
-            "/points",
-            Page[PointRecord],
-            PageQuery(page=page, items_per_page=items_per_page),
-        )
+    async def get_utilization(self, id: int) -> Utilization:
+        """Fetch a single utilization record from `/utilizations/{id}`."""
+        return await self._get_by_id("/utilizations", Utilization, id)
 
-    def iter_points(self, items_per_page: int = 200) -> AsyncIterator[PointRecord]:
-        """Fetch all pages of points from `/points`, in order."""
-        return self._iter_all(
-            "/points", Page[PointRecord], PageQuery(items_per_page=items_per_page)
-        )
+    async def get_points(self, query: PointQuery | None = None) -> Page[PointRecord]:
+        """Fetch a single page of points from `/points`, optionally filtered."""
+        return await self._get_page("/points", Page[PointRecord], query or PointQuery())
+
+    def iter_points(
+        self, query: PointQuery | None = None
+    ) -> AsyncIterator[PointRecord]:
+        """Fetch all pages of points from `/points`, in order, optionally filtered."""
+        return self._iter_all("/points", Page[PointRecord], query or PointQuery())
+
+    async def get_point(self, id: int) -> PointRecord:
+        """Fetch a single point from `/points/{id}`."""
+        return await self._get_by_id("/points", PointRecord, id)
 
     async def get_types(
         self, page: int = 1, items_per_page: int = 200
@@ -152,6 +162,10 @@ class NedClient:
         return self._iter_all(
             "/types", Page[TypeRecord], PageQuery(items_per_page=items_per_page)
         )
+
+    async def get_type(self, id: int) -> TypeRecord:
+        """Fetch a single type from `/types/{id}`."""
+        return await self._get_by_id("/types", TypeRecord, id)
 
     async def get_activities(
         self, page: int = 1, items_per_page: int = 200
@@ -173,6 +187,10 @@ class NedClient:
             PageQuery(items_per_page=items_per_page),
         )
 
+    async def get_activity(self, id: int) -> ActivityRecord:
+        """Fetch a single activity from `/activities/{id}`."""
+        return await self._get_by_id("/activities", ActivityRecord, id)
+
     async def get_classifications(
         self, page: int = 1, items_per_page: int = 200
     ) -> Page[ClassificationRecord]:
@@ -192,6 +210,10 @@ class NedClient:
             Page[ClassificationRecord],
             PageQuery(items_per_page=items_per_page),
         )
+
+    async def get_classification(self, id: int) -> ClassificationRecord:
+        """Fetch a single classification from `/classifications/{id}`."""
+        return await self._get_by_id("/classifications", ClassificationRecord, id)
 
     async def get_granularities(
         self, page: int = 1, items_per_page: int = 200
@@ -213,6 +235,10 @@ class NedClient:
             PageQuery(items_per_page=items_per_page),
         )
 
+    async def get_granularity(self, id: int) -> GranularityRecord:
+        """Fetch a single granularity from `/granularities/{id}`."""
+        return await self._get_by_id("/granularities", GranularityRecord, id)
+
     async def get_granularity_time_zones(
         self, page: int = 1, items_per_page: int = 200
     ) -> Page[GranularityTimeZoneRecord]:
@@ -231,4 +257,10 @@ class NedClient:
             "/granularity_time_zones",
             Page[GranularityTimeZoneRecord],
             PageQuery(items_per_page=items_per_page),
+        )
+
+    async def get_granularity_time_zone(self, id: int) -> GranularityTimeZoneRecord:
+        """Fetch a single granularity time zone from `/granularity_time_zones/{id}`."""
+        return await self._get_by_id(
+            "/granularity_time_zones", GranularityTimeZoneRecord, id
         )

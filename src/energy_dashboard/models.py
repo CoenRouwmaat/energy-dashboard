@@ -6,7 +6,7 @@ the worked example in the NED API manual (https://ned.nl/nl/handleiding-api).
 
 import re
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
@@ -59,6 +59,7 @@ class UtilizationQuery(PageQuery):
     `energy_dashboard.enums.Point` and `energy_dashboard.enums.EnergyType`.
     """
 
+    id: int | None = None
     point: int
     type: int
     activity: Activity
@@ -67,11 +68,12 @@ class UtilizationQuery(PageQuery):
     granularity_timezone: GranularityTimeZone = GranularityTimeZone.CET
     valid_from: datetime
     valid_to: datetime
+    order_by_valid_from: Literal["asc", "desc"] | None = None
     items_per_page: int = Field(default=144, le=200, gt=0)
 
     def to_params(self) -> dict[str, str | int]:
         """Render as the query-string parameters NED expects."""
-        return {
+        params: dict[str, str | int] = {
             **super().to_params(),
             "point": self.point,
             "type": self.type,
@@ -82,6 +84,11 @@ class UtilizationQuery(PageQuery):
             "validfrom[after]": self.valid_from.date().isoformat(),
             "validfrom[strictly_before]": self.valid_to.date().isoformat(),
         }
+        if self.id is not None:
+            params["id"] = self.id
+        if self.order_by_valid_from is not None:
+            params["order[validfrom]"] = self.order_by_valid_from
+        return params
 
 
 class Utilization(BaseModel):
@@ -151,6 +158,31 @@ class PointRecord(BaseModel):
     parent_points: Annotated[list[int], BeforeValidator(_iris_to_ids)] = Field(
         default_factory=list, alias="parentpoints"
     )
+
+
+class PointQuery(PageQuery):
+    """Query parameters for `GET /points`."""
+
+    id: int | None = None
+    identifier: int | None = None
+    name: str | None = None
+    parent_points: int | None = None
+    child_points: int | None = None
+
+    def to_params(self) -> dict[str, str | int]:
+        """Render as the query-string parameters NED expects."""
+        params = super().to_params()
+        if self.id is not None:
+            params["id"] = self.id
+        if self.identifier is not None:
+            params["identifier"] = self.identifier
+        if self.name is not None:
+            params["name"] = self.name
+        if self.parent_points is not None:
+            params["parentpoints"] = self.parent_points
+        if self.child_points is not None:
+            params["childpoints"] = self.child_points
+        return params
 
 
 class TypeRecord(BaseModel):
