@@ -21,3 +21,5 @@ class NedSettings(BaseSettings):
     api_key: SecretStr
     base_url: HttpUrl = HttpUrl("https://api.ned.nl/v1")
     timeout_seconds: float = 30.0
+    max_retries: int = 3
+    retry_backoff_seconds: float = 1.0

@@ -8,19 +8,39 @@ from energy_dashboard.enums import (
     Point,
 )
 from energy_dashboard.exceptions import NedApiError
-from energy_dashboard.models import Utilization, UtilizationPage, UtilizationQuery
+from energy_dashboard.models import (
+    ActivityRecord,
+    ClassificationRecord,
+    GranularityRecord,
+    GranularityTimeZoneRecord,
+    Page,
+    PageQuery,
+    PointRecord,
+    TypeRecord,
+    Utilization,
+    UtilizationPage,
+    UtilizationQuery,
+)
 from energy_dashboard.settings import NedSettings
 
 __all__ = [
     "Activity",
+    "ActivityRecord",
     "Classification",
+    "ClassificationRecord",
     "EnergyType",
     "Granularity",
+    "GranularityRecord",
     "GranularityTimeZone",
+    "GranularityTimeZoneRecord",
     "NedApiError",
     "NedClient",
     "NedSettings",
+    "Page",
+    "PageQuery",
     "Point",
+    "PointRecord",
+    "TypeRecord",
     "Utilization",
     "UtilizationPage",
     "UtilizationQuery",

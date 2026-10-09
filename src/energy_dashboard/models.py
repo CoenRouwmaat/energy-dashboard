@@ -6,8 +6,9 @@ the worked example in the NED API manual (https://ned.nl/nl/handleiding-api).
 
 import re
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
 from energy_dashboard.enums import (
     Activity,
@@ -30,7 +31,27 @@ def _iri_to_id(value: object) -> object:
     return value
 
 
-class UtilizationQuery(BaseModel):
+class Page[T](BaseModel):
+    """A single (JSON-LD/Hydra) page of records of type `T`."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    items: list[T] = Field(alias="hydra:member")
+    total_items: int = Field(alias="hydra:totalItems")
+
+
+class PageQuery(BaseModel):
+    """Pagination parameters shared by every NED list endpoint."""
+
+    page: int = Field(default=1, ge=1)
+    items_per_page: int = Field(default=200, le=200, gt=0)
+
+    def to_params(self) -> dict[str, str | int]:
+        """Render as the query-string parameters NED expects."""
+        return {"page": self.page, "itemsPerPage": self.items_per_page}
+
+
+class UtilizationQuery(PageQuery):
     """Query parameters for `GET /utilizations`.
 
     `point` and `type` are left as plain integers since the NED API defines
@@ -46,12 +67,12 @@ class UtilizationQuery(BaseModel):
     granularity_timezone: GranularityTimeZone = GranularityTimeZone.CET
     valid_from: datetime
     valid_to: datetime
-    page: int = 1
     items_per_page: int = Field(default=144, le=200, gt=0)
 
     def to_params(self) -> dict[str, str | int]:
         """Render as the query-string parameters NED expects."""
         return {
+            **super().to_params(),
             "point": self.point,
             "type": self.type,
             "activity": self.activity.value,
@@ -60,8 +81,6 @@ class UtilizationQuery(BaseModel):
             "granularitytimezone": self.granularity_timezone.value,
             "validfrom[after]": self.valid_from.date().isoformat(),
             "validfrom[strictly_before]": self.valid_to.date().isoformat(),
-            "page": self.page,
-            "itemsPerPage": self.items_per_page,
         }
 
 
@@ -106,10 +125,68 @@ class Utilization(BaseModel):
         return _iri_to_id(value)
 
 
-class UtilizationPage(BaseModel):
-    """A single (JSON-LD/Hydra) page of `Utilization` records."""
+UtilizationPage = Page[Utilization]
+
+
+def _iris_to_ids(value: object) -> object:
+    if isinstance(value, list):
+        return [_iri_to_id(item) for item in value]
+    return value
+
+
+class PointRecord(BaseModel):
+    """A region from `GET /points`; parent/child points are parsed to their ids."""
 
     model_config = ConfigDict(populate_by_name=True)
 
-    items: list[Utilization] = Field(alias="hydra:member")
-    total_items: int = Field(alias="hydra:totalItems")
+    id: int
+    identifier: int
+    name: str
+    name_short: str = Field(alias="nameshort")
+    valid_from: datetime = Field(alias="validfrom")
+    valid_to: datetime | None = Field(default=None, alias="validto")
+    child_points: Annotated[list[int], BeforeValidator(_iris_to_ids)] = Field(
+        default_factory=list, alias="childpoints"
+    )
+    parent_points: Annotated[list[int], BeforeValidator(_iris_to_ids)] = Field(
+        default_factory=list, alias="parentpoints"
+    )
+
+
+class TypeRecord(BaseModel):
+    """An energy carrier from `GET /types`."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: int
+    identifier: int
+    name: str
+    name_short: str = Field(alias="nameshort")
+
+
+class ActivityRecord(BaseModel):
+    """An activity from `GET /activities`."""
+
+    id: int
+    name: str
+
+
+class ClassificationRecord(BaseModel):
+    """A classification from `GET /classifications`."""
+
+    id: int
+    name: str
+
+
+class GranularityRecord(BaseModel):
+    """A granularity from `GET /granularities`."""
+
+    id: int
+    name: str
+
+
+class GranularityTimeZoneRecord(BaseModel):
+    """A time zone from `GET /granularity_time_zones`."""
+
+    id: int
+    name: str

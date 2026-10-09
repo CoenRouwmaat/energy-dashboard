@@ -2,6 +2,31 @@
 
 <!-- git-cliff: end of header -->
 
+## [0.3.0] - 2026-10-09
+
+`NedClient` now retries failed requests and covers NED's reference data endpoints.
+
+### 🚀 Features
+
+- *(ned)* Requests that fail with 429, 500, 502, 503 or 504 are retried with exponential backoff, honouring the `Retry-After` header. Tune it with `NED_MAX_RETRIES` (default 3) and `NED_RETRY_BACKOFF_SECONDS` (default 1.0); `NedApiError` is raised once retries run out.
+- *(ned)* New `get_*` / `iter_*` methods for the `/points`, `/types`, `/activities`, `/classifications`, `/granularities` and `/granularity_time_zones` endpoints, returning typed records such as `PointRecord`.
+
+### 🚜 Refactor
+
+- *(ned)* `NedClient` accepts an optional HTTP transport, and list endpoints share their pagination parameters.
+
+### 📚 Documentation
+
+- The NED client guide documents the reference data endpoints, retries and rate limits.
+
+### 🧪 Testing
+
+- Added tests for retries and backoff, the reference data endpoints, request setup and error handling.
+
+### ⚙️ Miscellaneous Tasks
+
+- Added `/commit` and `/start-issues` skills with a guard hook for atomic commits, and the release skill now asks for approvals with `AskUserQuestion`.
+
 ## [0.2.0] - 2026-10-09
 
 `NedClient` is now async, and the repository gained release and changelog tooling.
