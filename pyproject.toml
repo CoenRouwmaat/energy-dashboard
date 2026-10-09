@@ -19,6 +19,7 @@ dependencies = [
 
 [project.scripts]
 energy-dashboard = "energy_dashboard:main"
+energy-dashboard-ui = "energy_dashboard.dashboard.__main__:main"
 
 [build-system]
 requires = ["uv_build>=0.11.22,<0.12.0"]
