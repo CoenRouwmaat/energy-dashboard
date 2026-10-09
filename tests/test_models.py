@@ -1,5 +1,8 @@
 from datetime import UTC, datetime
 
+import pytest
+from pydantic import ValidationError
+
 from energy_dashboard.enums import (
     Activity,
     Classification,
@@ -7,7 +10,12 @@ from energy_dashboard.enums import (
     Granularity,
     Point,
 )
-from energy_dashboard.models import Utilization, UtilizationPage, UtilizationQuery
+from energy_dashboard.models import (
+    PageQuery,
+    Utilization,
+    UtilizationPage,
+    UtilizationQuery,
+)
 
 # Verbatim worked example from the NED API manual (https://ned.nl/nl/handleiding-api),
 # with "emission"/"emissionfactor" filled in as null since the manual leaves them blank.
@@ -77,3 +85,16 @@ def test_utilization_page_parses_hydra_response() -> None:
     assert page.total_items == 1
     assert len(page.items) == 1
     assert page.items[0].id == 3844522221
+
+
+def test_page_query_to_params() -> None:
+    assert PageQuery(page=3, items_per_page=50).to_params() == {
+        "page": 3,
+        "itemsPerPage": 50,
+    }
+
+
+@pytest.mark.parametrize("items_per_page", [0, 201])
+def test_page_query_rejects_invalid_items_per_page(items_per_page: int) -> None:
+    with pytest.raises(ValidationError):
+        PageQuery(items_per_page=items_per_page)

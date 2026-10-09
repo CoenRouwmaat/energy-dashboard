@@ -31,7 +31,27 @@ def _iri_to_id(value: object) -> object:
     return value
 
 
-class UtilizationQuery(BaseModel):
+class Page[T](BaseModel):
+    """A single (JSON-LD/Hydra) page of records of type `T`."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    items: list[T] = Field(alias="hydra:member")
+    total_items: int = Field(alias="hydra:totalItems")
+
+
+class PageQuery(BaseModel):
+    """Pagination parameters shared by every NED list endpoint."""
+
+    page: int = Field(default=1, ge=1)
+    items_per_page: int = Field(default=200, le=200, gt=0)
+
+    def to_params(self) -> dict[str, str | int]:
+        """Render as the query-string parameters NED expects."""
+        return {"page": self.page, "itemsPerPage": self.items_per_page}
+
+
+class UtilizationQuery(PageQuery):
     """Query parameters for `GET /utilizations`.
 
     `point` and `type` are left as plain integers since the NED API defines
@@ -47,12 +67,12 @@ class UtilizationQuery(BaseModel):
     granularity_timezone: GranularityTimeZone = GranularityTimeZone.CET
     valid_from: datetime
     valid_to: datetime
-    page: int = 1
     items_per_page: int = Field(default=144, le=200, gt=0)
 
     def to_params(self) -> dict[str, str | int]:
         """Render as the query-string parameters NED expects."""
         return {
+            **super().to_params(),
             "point": self.point,
             "type": self.type,
             "activity": self.activity.value,
@@ -61,8 +81,6 @@ class UtilizationQuery(BaseModel):
             "granularitytimezone": self.granularity_timezone.value,
             "validfrom[after]": self.valid_from.date().isoformat(),
             "validfrom[strictly_before]": self.valid_to.date().isoformat(),
-            "page": self.page,
-            "itemsPerPage": self.items_per_page,
         }
 
 
@@ -107,22 +125,7 @@ class Utilization(BaseModel):
         return _iri_to_id(value)
 
 
-class UtilizationPage(BaseModel):
-    """A single (JSON-LD/Hydra) page of `Utilization` records."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    items: list[Utilization] = Field(alias="hydra:member")
-    total_items: int = Field(alias="hydra:totalItems")
-
-
-class Page[T](BaseModel):
-    """A single (JSON-LD/Hydra) page of records of type `T`."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    items: list[T] = Field(alias="hydra:member")
-    total_items: int = Field(alias="hydra:totalItems")
+UtilizationPage = Page[Utilization]
 
 
 def _iris_to_ids(value: object) -> object:
