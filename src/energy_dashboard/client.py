@@ -1,5 +1,6 @@
 """HTTP client for the NED (Nationaal Energie Dashboard) API."""
 
+import asyncio
 from collections.abc import AsyncIterator
 from types import TracebackType
 from typing import Self
@@ -9,6 +10,8 @@ import httpx
 from energy_dashboard.exceptions import NedApiError
 from energy_dashboard.models import Utilization, UtilizationPage, UtilizationQuery
 from energy_dashboard.settings import NedSettings
+
+RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 
 
 class NedClient:
@@ -44,11 +47,37 @@ class NedClient:
     async def close(self) -> None:
         await self._http.aclose()
 
+    def _retry_delay(self, response: httpx.Response, attempt: int) -> float:
+        """Seconds to wait before retry number `attempt` (0-based).
+
+        Honours a numeric `Retry-After` header, else backs off exponentially.
+        """
+        retry_after = response.headers.get("Retry-After", "")
+        if retry_after.isdecimal():
+            return float(retry_after)
+        return self._settings.retry_backoff_seconds * 2**attempt
+
+    async def _get(self, path: str, params: dict[str, str | int]) -> httpx.Response:
+        """GET `path`, retrying 429/5xx responses with backoff.
+
+        Raises `NedApiError` for any error response still failing once
+        `max_retries` retries are exhausted, or for non-retryable errors.
+        """
+        for attempt in range(self._settings.max_retries + 1):
+            response = await self._http.get(path, params=params)
+            if not response.is_error:
+                return response
+            if (
+                response.status_code not in RETRYABLE_STATUS_CODES
+                or attempt == self._settings.max_retries
+            ):
+                raise NedApiError(response.status_code, response.text)
+            await asyncio.sleep(self._retry_delay(response, attempt))
+        raise AssertionError("unreachable")  # pragma: no cover
+
     async def get_utilizations(self, query: UtilizationQuery) -> UtilizationPage:
         """Fetch a single page of utilization records matching `query`."""
-        response = await self._http.get("/utilizations", params=query.to_params())
-        if response.is_error:
-            raise NedApiError(response.status_code, response.text)
+        response = await self._get("/utilizations", query.to_params())
         return UtilizationPage.model_validate(response.json())
 
     async def iter_utilizations(
