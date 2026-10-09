@@ -34,11 +34,16 @@ class NedClient:
             page = await client.get_utilizations(query)
     """
 
-    def __init__(self, settings: NedSettings | None = None) -> None:
+    def __init__(
+        self,
+        settings: NedSettings | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         self._settings = settings or NedSettings()
         self._http = httpx.AsyncClient(
             base_url=str(self._settings.base_url),
             timeout=self._settings.timeout_seconds,
+            transport=transport,
             headers={
                 "X-AUTH-TOKEN": self._settings.api_key.get_secret_value(),
                 "Accept": "application/ld+json",
