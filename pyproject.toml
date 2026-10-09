@@ -1,6 +1,6 @@
 [project]
 name = "energy-dashboard"
-version = "0.1.0"
+version = "0.2.0"
 description = "Add your description here"
 readme = "README.md"
 authors = [
@@ -24,6 +24,7 @@ build-backend = "uv_build"
 dev = [
     "git-cliff>=2.14.2",
     "ipykernel>=7.4.0",
+    "prek>=0.5.5",
     "pytest>=9.1.1",
     "ruff>=0.16.10",
     "ty>=0.0.85",

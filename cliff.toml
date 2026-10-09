@@ -5,6 +5,12 @@
 [changelog]
 # Used by `--prepend` to remove the previous header.
 header_marker = "<!-- git-cliff: end of header -->"
+# Header written at the top of CHANGELOG.md (before the marker).
+header = """# Changelog
+
+<!-- git-cliff: end of header -->
+
+"""
 # A Tera template to be rendered for each release in the changelog.
 # See https://keats.github.io/tera/#getting-started
 body = """
@@ -35,6 +41,12 @@ postprocessors = [
 # render_always = true
 # output file path
 # output = "test.md"
+
+[bump]
+# Pre-1.0: breaking changes bump the minor version, features bump the minor version too.
+features_always_bump_minor = true
+breaking_always_bump_major = false
+initial_tag = "0.1.0"
 
 [git]
 # Parse commits according to the conventional commits specification.

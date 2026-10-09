@@ -1,0 +1,17 @@
+[[repos]]
+repo = "builtin"
+hooks = [
+    { id = "trailing-whitespace" },
+    { id = "end-of-file-fixer" },
+    { id = "check-toml" },
+    { id = "check-added-large-files" },
+]
+
+# Local hooks run through `uv run` so they use the versions pinned in uv.lock.
+[[repos]]
+repo = "local"
+hooks = [
+    { id = "ruff-check", name = "ruff check", language = "system", entry = "uv run ruff check --fix", types = ["python"] },
+    { id = "ruff-format", name = "ruff format", language = "system", entry = "uv run ruff format", types = ["python"] },
+    { id = "ty", name = "ty check", language = "system", entry = "uv run ty check", types = ["python"], pass_filenames = false },
+]

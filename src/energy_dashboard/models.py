@@ -93,7 +93,13 @@ class Utilization(BaseModel):
     last_update: datetime = Field(alias="lastupdate")
 
     @field_validator(
-        "point", "type", "granularity", "granularity_timezone", "activity", "classification", mode="before"
+        "point",
+        "type",
+        "granularity",
+        "granularity_timezone",
+        "activity",
+        "classification",
+        mode="before",
     )
     @classmethod
     def _parse_iri(cls, value: object) -> object:
