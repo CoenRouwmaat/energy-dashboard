@@ -12,13 +12,12 @@ Thin wrapper around the [NED (Nationaal Energie Dashboard) API](https://ned.nl/n
 ```python
 from datetime import datetime
 
-from energy_dashboard import NedClient, UtilizationQuery
-from energy_dashboard.enums import Activity, Classification, Granularity
+from energy_dashboard import Activity, Classification, EnergyType, Granularity, NedClient, Point, UtilizationQuery
 
 query = UtilizationQuery(
-    point=0,  # Netherlands — see NED docs for regional codes
-    type=2,  # energy carrier code — see NED docs
-    activity=Activity.PRODUCTION,
+    point=Point.NETHERLANDS,
+    type=EnergyType.SOLAR,
+    activity=Activity.PROVIDING,
     classification=Classification.CURRENT,
     granularity=Granularity.DAY,
     valid_from=datetime(2026, 1, 1),
@@ -33,5 +32,5 @@ with NedClient() as client:
 `NedSettings` loads `NED_API_KEY` (and optional `NED_BASE_URL` / `NED_TIMEOUT_SECONDS`)
 from the environment or `.env` automatically.
 
-The `point` and `type` codes are NED-defined integers (region and energy-carrier
-codes) that aren't enumerated here — look them up in the NED API documentation.
+`point` and `type` are NED-defined integer codes for regions and energy carriers,
+enumerated in `energy_dashboard.enums.Point` and `energy_dashboard.enums.EnergyType`.
