@@ -56,7 +56,7 @@ See [docs/ned_client.md](docs/ned_client.md) for a full usage guide and
 ```
 src/energy_dashboard/   # NED API client: settings, enums, models, client
 tests/                  # unit tests
-docs/                   # usage guides
+docs/                   # usage guides and future improvements
 notebooks/              # runnable examples
 ```
 
