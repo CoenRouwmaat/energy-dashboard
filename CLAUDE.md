@@ -21,7 +21,7 @@ It runs ruff check/format and ty. Run pytest yourself; it is not a hook.
 - Day-to-day work goes directly on the `dev` branch. `main` only holds stable versions.
 - Feature branches (deleted after merge) are merged with a **squash** commit; plain `dev` work is not squashed.
 - Commits are **atomic** and follow **Conventional Commits** (`feat(ned): ...`, `fix:`, `docs:`, `test:`, `style:`, `chore:`). One logical change per commit: don't mix formatting, deps or docs into a feature commit.
-- Scope is the area touched (currently `ned`); omit it for repo-wide changes.
+- Scope is the area touched; omit it for repo-wide changes.
 - Mark breaking changes with `!` (`feat(ned)!: ...`); git-cliff renders them as **breaking**.
 - Reference issues with `Closes #N` in the commit body. Work is tracked on the GitHub project "Energy dashboard" (statuses such as In Progress); use `gh` for it.
 - Don't push unless asked.
