@@ -23,7 +23,15 @@ Fill in `NED_API_KEY` in `.env`.
 ```python
 from datetime import datetime
 
-from energy_dashboard import Activity, Classification, EnergyType, Granularity, NedClient, Point, UtilizationQuery
+from energy_dashboard import (
+    Activity,
+    Classification,
+    EnergyType,
+    Granularity,
+    NedClient,
+    Point,
+    UtilizationQuery,
+)
 
 query = UtilizationQuery(
     point=Point.NETHERLANDS,
@@ -35,8 +43,8 @@ query = UtilizationQuery(
     valid_to=datetime(2026, 1, 8),
 )
 
-with NedClient() as client:
-    page = client.get_utilizations(query)
+async with NedClient() as client:
+    page = await client.get_utilizations(query)
     print(page.total_items, len(page.items))
 ```
 
