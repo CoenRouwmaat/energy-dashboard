@@ -45,3 +45,10 @@ from the environment or `.env` automatically.
 
 `point` and `type` are NED-defined integer codes for regions and energy carriers,
 enumerated in `energy_dashboard.enums.Point` and `energy_dashboard.enums.EnergyType`.
+
+## Retries and rate limits
+
+NED allows 200 requests per 5 minutes. Responses with status 429, 500, 502, 503 or 504
+are retried up to `NED_MAX_RETRIES` times (default 3), waiting for the `Retry-After`
+header if present and otherwise `NED_RETRY_BACKOFF_SECONDS` (default 1.0) doubled on
+each attempt. Once retries run out, or for any other error status, `NedApiError` is raised.
