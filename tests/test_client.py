@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 from energy_dashboard import (
     Activity,
@@ -33,10 +34,11 @@ def make_query(items_per_page: int = 2) -> UtilizationQuery:
     )
 
 
-def make_client(handler: httpx.MockTransport) -> NedClient:
-    client = NedClient(NedSettings(api_key="test-key"))
-    client._http = httpx.AsyncClient(base_url="https://ned.test", transport=handler)
-    return client
+def make_client(
+    handler: httpx.MockTransport, settings: NedSettings | None = None
+) -> NedClient:
+    settings = settings or NedSettings(api_key="test-key", base_url="https://ned.test")
+    return NedClient(settings, transport=handler)
 
 
 def page_body(n: int) -> dict:
@@ -254,3 +256,186 @@ def test_reference_endpoint_retries_on_rate_limit(
 
     assert asyncio.run(run()).items == []
     assert sleeps == [3.0]
+
+
+def test_client_sends_auth_and_accept_headers_to_configured_base_url() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json=page_body(1))
+
+    async def run() -> None:
+        # Default base_url, so the real constructor configuration is what is tested.
+        client = NedClient(
+            NedSettings(api_key="secret-key"), transport=httpx.MockTransport(handler)
+        )
+        async with client:
+            await client.get_utilizations(make_query())
+
+    asyncio.run(run())
+    request = requests[0]
+    assert request.url.host == "api.ned.nl"
+    assert request.url.path == "/v1/utilizations"
+    assert request.headers["X-AUTH-TOKEN"] == "secret-key"
+    assert request.headers["Accept"] == "application/ld+json"
+
+
+def test_get_utilizations_sends_query_params() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json=page_body(1))
+
+    async def run() -> None:
+        async with make_client(httpx.MockTransport(handler)) as client:
+            await client.get_utilizations(make_query())
+
+    asyncio.run(run())
+    params = requests[0].url.params
+    assert params["point"] == str(Point.NETHERLANDS.value)
+    assert params["type"] == str(EnergyType.SOLAR.value)
+    assert params["validfrom[after]"] == "2026-01-01"
+    assert params["validfrom[strictly_before]"] == "2026-01-08"
+    assert params["page"] == "1"
+    assert params["itemsPerPage"] == "2"
+
+
+def test_api_error_carries_status_code_and_body() -> None:
+    async def run() -> None:
+        transport = httpx.MockTransport(lambda r: httpx.Response(404, text="no such"))
+        async with make_client(transport) as client:
+            await client.get_points()
+
+    with pytest.raises(NedApiError) as exc_info:
+        asyncio.run(run())
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.message == "no such"
+    assert "404" in str(exc_info.value)
+
+
+def test_get_utilizations_returns_empty_page() -> None:
+    async def run():
+        transport = httpx.MockTransport(
+            lambda r: httpx.Response(200, json=page_body(0))
+        )
+        async with make_client(transport) as client:
+            return await client.get_utilizations(make_query())
+
+    page = asyncio.run(run())
+    assert page.items == []
+    assert page.total_items == 0
+
+
+def test_get_utilizations_raises_on_malformed_body() -> None:
+    async def run() -> None:
+        transport = httpx.MockTransport(
+            lambda r: httpx.Response(200, json={"unexpected": []})
+        )
+        async with make_client(transport) as client:
+            await client.get_utilizations(make_query())
+
+    with pytest.raises(ValidationError):
+        asyncio.run(run())
+
+
+def test_iter_utilizations_stops_on_empty_page_after_full_pages() -> None:
+    pages_requested: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        page = request.url.params["page"]
+        pages_requested.append(page)
+        return httpx.Response(200, json=page_body(0 if page == "3" else 2))
+
+    async def run():
+        async with make_client(httpx.MockTransport(handler)) as client:
+            return [r async for r in client.iter_utilizations(make_query())]
+
+    assert len(asyncio.run(run())) == 4
+    assert pages_requested == ["1", "2", "3"]
+
+
+def test_iter_utilizations_propagates_error_mid_iteration() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.params["page"] == "1":
+            return httpx.Response(200, json=page_body(2))
+        return httpx.Response(403, text="forbidden")
+
+    seen: list[object] = []
+
+    async def run() -> None:
+        async with make_client(httpx.MockTransport(handler)) as client:
+            async for record in client.iter_utilizations(make_query()):
+                seen.append(record)
+
+    with pytest.raises(NedApiError):
+        asyncio.run(run())
+    assert len(seen) == 2
+
+
+def test_retries_are_bounded_by_max_retries(monkeypatch: pytest.MonkeyPatch) -> None:
+    requests: list[httpx.Request] = []
+    sleeps: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(503)
+
+    settings = NedSettings(
+        api_key="test-key",
+        base_url="https://ned.test",
+        max_retries=2,
+        retry_backoff_seconds=0.5,
+    )
+
+    async def run() -> None:
+        async with make_client(httpx.MockTransport(handler), settings) as client:
+            await client.get_utilizations(make_query())
+
+    with pytest.raises(NedApiError):
+        asyncio.run(run())
+    assert len(requests) == 3
+    assert sleeps == [0.5, 1.0]
+
+
+def test_max_retries_zero_disables_retrying(monkeypatch: pytest.MonkeyPatch) -> None:
+    requests: list[httpx.Request] = []
+
+    async def fake_sleep(delay: float) -> None:
+        raise AssertionError("should not sleep")
+
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(429)
+
+    settings = NedSettings(
+        api_key="test-key", base_url="https://ned.test", max_retries=0
+    )
+
+    async def run() -> None:
+        async with make_client(httpx.MockTransport(handler), settings) as client:
+            await client.get_utilizations(make_query())
+
+    with pytest.raises(NedApiError):
+        asyncio.run(run())
+    assert len(requests) == 1
+
+
+def test_context_manager_closes_http_client() -> None:
+    async def run() -> NedClient:
+        transport = httpx.MockTransport(
+            lambda r: httpx.Response(200, json=page_body(0))
+        )
+        async with make_client(transport) as client:
+            assert not client._http.is_closed
+        return client
+
+    assert asyncio.run(run())._http.is_closed
