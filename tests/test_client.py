@@ -12,6 +12,7 @@ from energy_dashboard import (
     NedApiError,
     NedClient,
     NedSettings,
+    Page,
     Point,
     UtilizationPage,
     UtilizationQuery,
@@ -150,3 +151,106 @@ def test_get_utilizations_does_not_retry_client_errors(
 ) -> None:
     with pytest.raises(NedApiError):
         run_with_sleeps([httpx.Response(401)], monkeypatch)
+
+
+POINT_RECORD = {
+    "@id": "/v1/points/1",
+    "@type": "Point",
+    "id": 1,
+    "identifier": 1,
+    "name": "Groningen",
+    "nameshort": "GRNG",
+    "validfrom": "2020-01-01T00:00:00+00:00",
+    "validto": None,
+    "childpoints": ["/v1/points/20", "/v1/points/21"],
+    "parentpoints": ["/v1/points/0"],
+}
+
+REFERENCE_ENDPOINTS = [
+    ("points", POINT_RECORD),
+    ("types", {"id": 2, "identifier": 2, "name": "Solar", "nameshort": "ZON"}),
+    ("activities", {"id": 1, "name": "Providing"}),
+    ("classifications", {"id": 2, "name": "Current"}),
+    ("granularities", {"id": 5, "name": "Hour"}),
+    ("granularity_time_zones", {"id": 1, "name": "CET"}),
+]
+
+
+@pytest.mark.parametrize(("name", "record"), REFERENCE_ENDPOINTS)
+def test_get_reference_endpoint_returns_parsed_page(name: str, record: dict) -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        body = {"hydra:member": [record, record], "hydra:totalItems": 2}
+        return httpx.Response(200, json=body)
+
+    async def run() -> Page:
+        async with make_client(httpx.MockTransport(handler)) as client:
+            return await getattr(client, f"get_{name}")()
+
+    page = asyncio.run(run())
+    assert requests[0].url.path == f"/{name}"
+    assert requests[0].url.params["itemsPerPage"] == "200"
+    assert len(page.items) == 2
+    assert page.total_items == 2
+    assert page.items[0].id == record["id"]
+
+
+def test_point_record_parses_iri_references() -> None:
+    async def run() -> Page:
+        body = {"hydra:member": [POINT_RECORD], "hydra:totalItems": 1}
+        transport = httpx.MockTransport(lambda r: httpx.Response(200, json=body))
+        async with make_client(transport) as client:
+            return await client.get_points()
+
+    point = asyncio.run(run()).items[0]
+    assert point.name_short == "GRNG"
+    assert point.valid_to is None
+    assert point.child_points == [20, 21]
+    assert point.parent_points == [0]
+
+
+@pytest.mark.parametrize(("name", "record"), REFERENCE_ENDPOINTS)
+def test_iter_reference_endpoint_walks_pages(name: str, record: dict) -> None:
+    pages_requested: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        page = request.url.params["page"]
+        pages_requested.append(page)
+        n = 2 if page == "1" else 1
+        return httpx.Response(
+            200, json={"hydra:member": [record] * n, "hydra:totalItems": 3}
+        )
+
+    async def run() -> list:
+        async with make_client(httpx.MockTransport(handler)) as client:
+            return [r async for r in getattr(client, f"iter_{name}")(items_per_page=2)]
+
+    assert len(asyncio.run(run())) == 3
+    assert pages_requested == ["1", "2"]
+
+
+def test_reference_endpoint_retries_on_rate_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sleeps: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+    responses = iter(
+        [
+            httpx.Response(429, headers={"Retry-After": "3"}),
+            httpx.Response(200, json={"hydra:member": [], "hydra:totalItems": 0}),
+        ]
+    )
+
+    async def run() -> Page:
+        transport = httpx.MockTransport(lambda r: next(responses))
+        async with make_client(transport) as client:
+            return await client.get_types()
+
+    assert asyncio.run(run()).items == []
+    assert sleeps == [3.0]
