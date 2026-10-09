@@ -1,5 +1,7 @@
 # Changelog
 
+<!-- git-cliff: end of header -->
+
 ## [0.1.0] - 2026-10-09
 
 Initial release: a typed Python client for the [NED (Nationaal Energie Dashboard) API](https://ned.nl/nl/handleiding-api).
