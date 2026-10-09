@@ -46,6 +46,30 @@ from the environment or `.env` automatically.
 `point` and `type` are NED-defined integer codes for regions and energy carriers,
 enumerated in `energy_dashboard.enums.Point` and `energy_dashboard.enums.EnergyType`.
 
+## Reference data
+
+Besides utilizations, the client covers NED's reference endpoints. Each has a
+`get_*` method returning one `Page` and an `iter_*` async iterator over all pages
+(`items_per_page` defaults to 200, NED's maximum):
+
+| Endpoint | Methods | Record model |
+|---|---|---|
+| `/points` | `get_points` / `iter_points` | `PointRecord` |
+| `/types` | `get_types` / `iter_types` | `TypeRecord` |
+| `/activities` | `get_activities` / `iter_activities` | `ActivityRecord` |
+| `/classifications` | `get_classifications` / `iter_classifications` | `ClassificationRecord` |
+| `/granularities` | `get_granularities` / `iter_granularities` | `GranularityRecord` |
+| `/granularity_time_zones` | `get_granularity_time_zones` / `iter_granularity_time_zones` | `GranularityTimeZoneRecord` |
+
+```python
+async with NedClient() as client:
+    async for point in client.iter_points():
+        print(point.id, point.name)
+```
+
+`PointRecord.child_points` and `parent_points` are parsed from NED's IRI references
+down to point ids. Filtering and the `/{id}` endpoints are not covered yet.
+
 ## Retries and rate limits
 
 NED allows 200 requests per 5 minutes. Responses with status 429, 500, 502, 503 or 504
