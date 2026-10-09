@@ -32,6 +32,8 @@ The deterministic steps are scripts in [scripts/](scripts/), run from the repo r
 | `collect-issues.sh` | 7 | 0 OK, 1 a referenced issue does not exist |
 | `finish.sh [--dry-run]` | 9 | 0 done, 1 aborted |
 
+Every approval gate below (steps 2, 6, 8 and the `finish` run in step 9) is asked with the `AskUserQuestion` tool (e.g. Approve / Change something), after printing the thing to approve as text. Don't ask for approval in plain chat.
+
 Follow the commit conventions in [CLAUDE.md](../../../CLAUDE.md): atomic, conventional, `Co-Authored-By` trailer as given in the session's attribution instructions.
 
 ## 1. Preflight
@@ -45,7 +47,7 @@ It checks: on `dev` and not behind `origin/dev` or `origin/main`; `gh` authentic
 If `git status` is clean, skip. Otherwise:
 
 1. Group the changes into atomic conventional commits. Never stage `.env` or anything gitignored; if a change cannot be grouped confidently, ask.
-2. **Show the plan (files and message per commit) and wait for approval** before committing anything.
+2. **Show the plan (files and message per commit) and ask for approval** before committing anything.
 3. Commit as approved.
 
 ## 3. Determine the version
@@ -70,7 +72,7 @@ That exact prefix is skipped by `cliff.toml`, so the release commits stay out of
 
 1. `uv run git-cliff --unreleased --tag v<version> --prepend CHANGELOG.md` (the `<!-- git-cliff: end of header -->` marker in `CHANGELOG.md` is required for `--prepend`).
 2. Rewrite the new entry by hand into the style of the 0.1.0 entry: a one-line summary, then grouped bullets in prose that describe user-visible effect, not raw commit subjects. Call out breaking changes explicitly with migration hints.
-3. **Show the rewritten entry and wait for approval.**
+3. **Show the rewritten entry and ask for approval.**
 4. Commit `CHANGELOG.md` as `chore(release): prepare for v<version>`.
 
 ## 7. Collect issues
@@ -82,10 +84,10 @@ Run `.claude/skills/release/scripts/collect-issues.sh`. It reads `Closes|Fixes|R
 
 ## 8. Push and open the PR
 
-1. Before pushing, print a summary: version, commits included, the changelog entry, and the issues that will be closed. **Wait for approval.**
+1. Before pushing, print a summary: version, commits included, the changelog entry, and the issues that will be closed. **Ask for approval.**
 2. `git push origin dev`.
 3. `gh pr create --base main --head dev --title "release: v<version>"`. The body contains the changelog entry, then one `Closes #N` line per verified issue, and ends with the PR attribution line from the session's attribution instructions.
-4. Output the PR URL and remind the user to merge with a **merge commit** (not squash), then run `/release finish`.
+4. Open the PR in the browser with `gh pr view --web`, output the PR URL and remind the user to merge with a **merge commit** (not squash), then run `/release finish`.
 
 ### Handling prek failures (applies to every commit above)
 
@@ -94,7 +96,7 @@ Run `.claude/skills/release/scripts/collect-issues.sh`. It reads `Closes|Fixes|R
 
 ## 9. `/release finish`
 
-Run `.claude/skills/release/scripts/finish.sh --dry-run` first and show the output (tag, commit, release notes), then run `.claude/skills/release/scripts/finish.sh` once the user agrees.
+Run `.claude/skills/release/scripts/finish.sh --dry-run` first and show the output (tag, commit, release notes), then run `.claude/skills/release/scripts/finish.sh` once the user agrees (ask with `AskUserQuestion`).
 
 The script verifies the release PR is merged, tags the PR's merge commit (not whatever `main` points at now) with the version read from `pyproject.toml` at that commit, pushes the tag, creates the GitHub release with that version's `CHANGELOG.md` section as notes, fast-forwards `dev` to `origin/main`, and prints the state of each issue the PR closes.
 
