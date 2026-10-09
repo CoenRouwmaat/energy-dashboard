@@ -31,5 +31,7 @@ It runs ruff check/format and ty. Run pytest yourself; it is not a hook.
 [CHANGELOG.md](CHANGELOG.md) is generated with **git-cliff** ([cliff.toml](cliff.toml)) from commit messages, so
 commit messages are user-facing: write them so they read well as a changelog line.
 `style`, `test`, `docs` and `chore` commits end up in their own groups, so use the right type.
-For a release, generate the entry with `uv run git-cliff` and then rewrite it into a
-human-readable entry (see the 0.1.0 entry: a one-line summary, then grouped bullets in prose, not raw commit subjects).
+Changelog entries are rewritten by hand into prose after generation (see the 0.1.0 entry).
+Releases go through the `/release` skill ([.claude/skills/release/SKILL.md](.claude/skills/release/SKILL.md)):
+release commits use `chore(release): prepare for vX.Y.Z`, which `cliff.toml` skips. While pre-1.0, breaking changes bump the minor version.
+Release PRs (`dev` -> `main`) are merged with a **merge commit**, not a squash.
