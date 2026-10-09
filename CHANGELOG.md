@@ -2,6 +2,25 @@
 
 <!-- git-cliff: end of header -->
 
+## [0.4.0] - 2026-10-09
+
+`NedClient` gains filtering, ordering, and single-record lookups, and the repository now runs CI on every push and PR.
+
+### 🚀 Features
+
+- *(ned)* `UtilizationQuery` can filter by `id` and sort by `order_by_valid_from`; `/points` gains a `PointQuery` to filter by `id`, `identifier`, `name`, `parent_points`, or `child_points`; and every endpoint now has a single-record lookup (e.g. `get_point(id)`, `get_utilization(id)`)
+
+### 📚 Documentation
+
+- Added the MIT license and a security policy
+
+### ⚙️ Miscellaneous Tasks
+
+- GitHub Actions now runs `ruff`, `ty`, and `pytest` on pull requests and `dev` pushes, with Dependabot enabled for both GitHub Actions and uv dependencies
+- Added issue and pull request templates
+- `git commit` now requires explicit approval regardless of permission mode
+
+
 ## [0.3.0] - 2026-10-09
 
 `NedClient` now retries failed requests and covers NED's reference data endpoints.
